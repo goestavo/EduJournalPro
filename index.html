@@ -4,168 +4,370 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jurnal Mengajar - SMKN Sukaresik</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsPDF untuk cetak laporan -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-gray-100 p-4 md:p-8 font-sans text-gray-800">
+<body class="bg-gray-100 font-sans text-gray-800">
 
-    <div class="max-w-5xl mx-auto bg-white p-6 rounded-lg shadow-md">
-        <div class="text-center mb-8 border-b pb-4">
-            <h1 class="text-2xl font-bold text-gray-800">APLIKASI JURNAL MENGAJAR GURU</h1>
-            <h2 class="text-xl font-semibold text-gray-700">SMK NEGERI SUKARESIK</h2>
-            <p class="text-gray-600">Nama Guru: AGUS IMAM MUHAROM, S.T.</p>
+    <div class="max-w-5xl mx-auto bg-white min-h-screen shadow-md relative">
+        
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="hidden absolute inset-0 bg-white bg-opacity-80 z-50 flex flex-col justify-center items-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-700"></div>
+            <p class="mt-4 font-bold text-blue-700 text-center px-4" id="loadingText">Memproses Data Database...</p>
         </div>
 
-        <!-- Form Input Jurnal -->
-        <div class="mb-8 bg-blue-50 p-4 rounded-lg border border-blue-100">
-            <h3 class="font-bold text-lg mb-4 text-blue-800">Form Input Jurnal & Absensi</h3>
-            <form id="jurnalForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Tanggal</label>
-                    <input type="date" id="tanggal" required class="w-full border rounded p-2 focus:outline-blue-500">
+        <!-- Header -->
+        <div class="bg-blue-800 text-white p-6 text-center">
+            <h1 class="text-2xl font-bold">APLIKASI JURNAL MENGAJAR GURU</h1>
+            <h2 class="text-lg font-semibold">SMK NEGERI SUKARESIK</h2>
+            <p class="text-sm mt-1 text-blue-200">Nama Guru: AGUS IMAM MUHAROM, S.T.</p>
+        </div>
+
+        <!-- Tab Navigasi -->
+        <div class="flex border-b bg-gray-50">
+            <button onclick="bukaTab('tabInput')" id="navInput" class="flex-1 py-3 font-bold text-blue-700 border-b-4 border-blue-700 hover:bg-gray-200 transition">📝 Input Jurnal</button>
+            <button onclick="bukaTab('tabRiwayat')" id="navRiwayat" class="flex-1 py-3 font-bold text-gray-500 border-b-4 border-transparent hover:bg-gray-200 transition">🗂️ Riwayat & Cetak</button>
+            <button onclick="bukaTab('tabMaster')" id="navMaster" class="flex-1 py-3 font-bold text-gray-500 border-b-4 border-transparent hover:bg-gray-200 transition">⚙️ Master Data (Cloud)</button>
+        </div>
+
+        <div class="p-6">
+            <!-- ================= TAB 1: INPUT JURNAL ================= -->
+            <div id="tabInput" class="block">
+                <div class="mb-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded text-sm hidden" id="peringatanMasterData">
+                    <strong>Perhatian:</strong> Data kelas di server kosong. Silakan ke tab <strong>Master Data</strong> untuk mengunggah CSV kelas terlebih dahulu.
                 </div>
 
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Jam Pelajaran (contoh: 1-10)</label>
-                    <input type="text" id="jam" required placeholder="1-10" class="w-full border rounded p-2 focus:outline-blue-500">
-                </div>
+                <form id="jurnalForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Tanggal</label>
+                        <input type="date" id="tanggal" required class="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Jam Pelajaran (contoh: 1-10)</label>
+                        <input type="text" id="jam" required placeholder="1-10" class="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Kelas</label>
+                        <select id="kelas" required class="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500" onchange="renderAbsensiForm()">
+                            <option value="">-- Pilih Kelas --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Mata Pelajaran</label>
+                        <input type="text" id="mapel" value="Konsentrasi Keahlian TKJ" required class="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold mb-1">Materi Pembelajaran</label>
+                        <textarea id="materi" required rows="3" class="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold mb-1">Foto Dokumentasi (.jpg/.png max 1MB)</label>
+                        <input type="file" id="dokumentasi" accept="image/*" class="w-full border rounded p-2 bg-white">
+                    </div>
 
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Kelas</label>
-                    <select id="kelas" required class="w-full border rounded p-2 focus:outline-blue-500" onchange="renderAbsensiForm()">
-                        <option value="">-- Pilih Kelas --</option>
-                        <option value="XI TKJ 2">XI TKJ 2</option>
-                        <option value="XII TKJ 2">XII TKJ 2</option>
-                    </select>
-                </div>
+                    <div id="absensiContainer" class="md:col-span-2 hidden mt-4 border-t pt-4">
+                        <h4 class="font-bold text-md mb-2 bg-blue-100 p-2 rounded">Presensi Siswa (Ubah yang TIDAK HADIR saja)</h4>
+                        <div id="daftarSiswa" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                            <!-- Checkbox dirender JS -->
+                        </div>
+                    </div>
 
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Mata Pelajaran</label>
-                    <input type="text" id="mapel" value="Konsentrasi Keahlian TKJ" required class="w-full border rounded p-2 focus:outline-blue-500">
-                </div>
+                    <div class="md:col-span-2 mt-4">
+                        <button type="submit" id="btnSimpan" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded shadow hover:bg-blue-700 transition">
+                            💾 Simpan Jurnal ke Database
+                        </button>
+                    </div>
+                </form>
+            </div>
 
-                <div class="md:col-span-2">
-                    <label class="block text-sm font-semibold mb-1">Materi Pembelajaran</label>
-                    <textarea id="materi" required rows="3" placeholder="Deskripsikan materi..." class="w-full border rounded p-2 focus:outline-blue-500"></textarea>
-                </div>
-
-                <div class="md:col-span-2">
-                    <label class="block text-sm font-semibold mb-1">Foto Dokumentasi (Opsional, format .jpg/.png)</label>
-                    <input type="file" id="dokumentasi" accept="image/*" class="w-full border rounded p-2 bg-white">
-                </div>
-
-                <!-- Form Absensi Siswa Muncul Di Sini -->
-                <div id="absensiContainer" class="md:col-span-2 hidden mt-4 border-t pt-4">
-                    <h4 class="font-bold text-md mb-2">Presensi Siswa (Tandai yang TIDAK HADIR saja)</h4>
-                    <div id="daftarSiswa" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-sm max-h-64 overflow-y-auto bg-white p-3 border rounded">
-                        <!-- Checkbox siswa akan dirender via JS -->
+            <!-- ================= TAB 2: RIWAYAT & CETAK ================= -->
+            <div id="tabRiwayat" class="hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-lg text-gray-700">Data Jurnal Bulan Ini</h3>
+                    <div class="space-x-2">
+                        <button onclick="hapusSemuaJurnal()" class="bg-red-500 text-white text-sm font-bold py-2 px-4 rounded hover:bg-red-600 transition">Hapus Semua Data</button>
+                        <button onclick="generatePDF()" class="bg-green-600 text-white text-sm font-bold py-2 px-4 rounded hover:bg-green-700 shadow-lg transition">🖨️ Cetak PDF</button>
                     </div>
                 </div>
-
-                <div class="md:col-span-2 mt-4">
-                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition">
-                        Simpan Data ke Jurnal
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <!-- Tabel Data Tersimpan -->
-        <div class="mb-8">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="font-bold text-lg">Data Jurnal Bulan Ini</h3>
-                <div class="space-x-2">
-                    <button onclick="hapusSemuaData()" class="bg-red-500 text-white text-sm font-bold py-2 px-4 rounded hover:bg-red-600 transition">
-                        Hapus Semua Data
-                    </button>
-                    <button onclick="generatePDF()" class="bg-green-600 text-white text-sm font-bold py-2 px-4 rounded hover:bg-green-700 transition shadow-lg">
-                        Cetak Laporan PDF
-                    </button>
+                
+                <div class="overflow-x-auto border rounded-lg shadow-sm">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-200">
+                            <tr>
+                                <th class="p-3 border-b">Tgl</th>
+                                <th class="p-3 border-b">Kelas</th>
+                                <th class="p-3 border-b">Materi</th>
+                                <th class="p-3 border-b">Ket. Absen</th>
+                                <th class="p-3 border-b text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelJurnal" class="bg-white">
+                            <!-- Data Jurnal -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
-            
-            <div class="overflow-x-auto border rounded">
-                <table class="w-full text-sm text-left">
-                    <thead class="bg-gray-200">
-                        <tr>
-                            <th class="p-2 border">Tgl</th>
-                            <th class="p-2 border">Kelas</th>
-                            <th class="p-2 border">Materi</th>
-                            <th class="p-2 border">Ket. Absen</th>
-                            <th class="p-2 border text-center">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabelJurnal">
-                        <!-- Data Jurnal Masuk Sini -->
-                    </tbody>
-                </table>
+
+            <!-- ================= TAB 3: MASTER DATA (CLOUD) ================= -->
+            <div id="tabMaster" class="hidden">
+                <div class="bg-gray-50 border p-6 rounded-lg mb-6">
+                    <h3 class="font-bold text-lg mb-2">Unggah Data Siswa ke Server Database</h3>
+                    <p class="text-sm text-gray-600 mb-4">Format Excel (.csv) harus 2 kolom: <strong>Kelas</strong> dan <strong>Nama Siswa</strong>. Data akan tersimpan di Supabase Cloud.</p>
+                    <input type="file" id="fileCSV" accept=".csv" class="mb-4 block w-full border border-gray-300 p-2 rounded bg-white">
+                    <button onclick="prosesCSVSupabase()" class="bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">Mulai Upload ke Server</button>
+                </div>
+
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-bold text-lg text-gray-700">Daftar Kelas di Server</h3>
+                    <button onclick="hapusMasterDataSupabase()" class="text-red-500 text-sm font-bold hover:underline">Hapus Seluruh Data Siswa di Server</button>
+                </div>
+                <div id="previewMasterData" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Preview Kelas Render JS -->
+                </div>
             </div>
         </div>
-
     </div>
 
     <script>
-        // Data Master Siswa
-        const dataSiswa = {
-            "XI TKJ 2": [
-                "ADITYA TUBAGUS UMAM", "AHMAD PAUJAN", "AHRIL SAHRUL MUBAROK", "AIRA ZULIANTI", 
-                "AJI SETIAWAN", "AULIA ARTIKA RAMADHANI", "DANDI ARDIANSYAH PURKON", "DIDAN MULYANA", 
-                "DIMAS ANDREAN", "ERLYA KHOIRIL RAMADHANI", "FABIAN RIZKI PERMANA", "FAJRI RAHMAT RAMDANI", 
-                "GIA NABILA", "IMAS MULYANI", "JIHAN INSANIYAH", "KEMAL ANSORI", 
-                "MOCHAMAD FARHAN DARWIN KADARISMAN", "MUHAMAD FATHUR AZAIN", "MUHAMAD NABIL ASUAIL", 
-                "MUHAMMAD AZZAM ALGHYFARY", "MUSTOPA", "NAZWA SITI NURAZIZAH", "NIKI ARISKA RAHAYU", 
-                "NUR MASDANA CHESAR", "NURAINI ZAHRA", "PAHIRA NURAULIA", "RAIHAN AULIA RAHMAN SUSANTO", 
-                "RAJIB BAMBANG HADIANA", "RICKY FATUROHMAN", "RINRIN ANNISA", "RIYAN KAMAL MUHAMAD", 
-                "SELA SEPTIANI", "SOLIH SOPIAN"
-            ],
-            "XII TKJ 2": [
-                "ADIT FAUZI", "AILA", "ALISA GUSTIANA", "AMELIA AGUSTIN", "ANISA KHULATUL UMMAH", 
-                "ARDIAN RAHMAN", "ARIS SUBQI DZULQARNAEN", "AZHARUL ABYAN RAMDANI", "DHIKAL PAZDLU NOOR", 
-                "DZIKRA HIBATULLAH SUKANDAR", "FAUJIA RAMADHAN", "HASNA ZULFA Q.", "INDRA NURHIDAYAT", 
-                "JIHAN PARIDAH", "MALKI HIDAYAT", "MUTHIA TAZKIYA RAMADHANI", "NAUFAL PADLI", "NENG ANES", 
-                "NOVAL ADITIA", "NUR ALLIZA RUBYA HANIFA", "RAHMA SUMIA", "RATNINGSIH", "RIDHO FIRMANSYAH", 
-                "RIFQI DELA PUTRA", "RIZAL KRISZAN ANGGARA", "SAFIRA FITRIYANI", "SELA NURFADILAH", 
-                "SISMA SINTIA", "SITI NAYYARA ZAHRA AMIRA", "SUCI SULISTIAWATI", "SUSANTI", "ZAHRA AULIA", 
-                "NURUL AMELIA"
-            ]
-        };
+        // ================= KONFIGURASI SUPABASE =================
+        const supabaseUrl = 'https://aqitmcdmjxbmwuekdfce.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxaXRtY2RtanhibXd1ZWtkZmNlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3ODY5OTYsImV4cCI6MjEwNzM2Mjk5Nn0.C-RH8nx6ELjHD_srqRFesfsdoGb9na6EqlVexT_1Qek';
+        
+        let supabase = null;
+        if (window.supabase) {
+            supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        }
 
-        // State / Penyimpanan Data menggunakan LocalStorage
-        let jurnalData = JSON.parse(localStorage.getItem('jurnalAgusImam')) || [];
+        // ================= STATE =================
+        let jurnalData = []; 
+        let masterSiswa = {}; // Objek terstruktur untuk aplikasi (dihasilkan dari tarikan database)
 
-        // Fungsi merender form absen sesuai pilihan kelas
+        function showLoading(msg = "Memproses...") { 
+            document.getElementById('loadingText').innerText = msg;
+            document.getElementById('loadingOverlay').classList.remove('hidden'); 
+        }
+        function hideLoading() { 
+            document.getElementById('loadingOverlay').classList.add('hidden'); 
+        }
+
+        // ================= NAVIGASI TAB =================
+        function bukaTab(namaTab) {
+            document.getElementById('tabInput').classList.add('hidden');
+            document.getElementById('tabRiwayat').classList.add('hidden');
+            document.getElementById('tabMaster').classList.add('hidden');
+            
+            document.getElementById('navInput').className = "flex-1 py-3 font-bold text-gray-500 border-b-4 border-transparent hover:bg-gray-200 transition";
+            document.getElementById('navRiwayat').className = "flex-1 py-3 font-bold text-gray-500 border-b-4 border-transparent hover:bg-gray-200 transition";
+            document.getElementById('navMaster').className = "flex-1 py-3 font-bold text-gray-500 border-b-4 border-transparent hover:bg-gray-200 transition";
+            
+            document.getElementById(namaTab).classList.remove('hidden');
+            
+            const activeTabButton = document.getElementById(namaTab === 'tabInput' ? 'navInput' : namaTab === 'tabRiwayat' ? 'navRiwayat' : 'navMaster');
+            activeTabButton.className = "flex-1 py-3 font-bold text-blue-700 border-b-4 border-blue-700 hover:bg-gray-200 transition";
+        }
+
+        // ================= INISIALISASI SERVER =================
+        async function initApp() {
+            if (supabase) {
+                showLoading("Mengambil seluruh data dari Server...");
+                await fetchMasterSiswa();
+                await fetchDataJurnal();
+                hideLoading();
+            } else {
+                alert("Sistem gagal memuat koneksi Supabase.");
+            }
+        }
+
+        // Tarik Data Siswa dari Server Master
+        async function fetchMasterSiswa() {
+            try {
+                const { data, error } = await supabase
+                    .from('master_siswa')
+                    .select('*')
+                    .order('nama_siswa', { ascending: true }); // Urut abjad
+                
+                if (error) throw error;
+                
+                masterSiswa = {};
+                // Konversi data flat database menjadi objek pengelompokan kelas
+                data.forEach(row => {
+                    if (!masterSiswa[row.kelas]) {
+                        masterSiswa[row.kelas] = [];
+                    }
+                    masterSiswa[row.kelas].push(row.nama_siswa);
+                });
+
+                renderDropdownKelas();
+                renderPreviewMasterData();
+                cekStatusMaster();
+            } catch (err) {
+                console.error(err);
+                alert("Gagal menarik data Master Siswa. Pastikan tabel master_siswa sudah dibuat tanpa RLS.");
+            }
+        }
+
+        // Tarik Data Jurnal dari Server
+        async function fetchDataJurnal() {
+            try {
+                const { data, error } = await supabase
+                    .from('jurnal_mengajar')
+                    .select('*')
+                    .order('id', { ascending: true });
+                
+                if (error) throw error;
+                jurnalData = data || [];
+                renderTabelJurnal();
+            } catch (err) {
+                console.error(err);
+                alert("Gagal menarik data Jurnal.");
+            }
+        }
+
+        function cekStatusMaster() {
+            if(Object.keys(masterSiswa).length === 0) {
+                document.getElementById('peringatanMasterData').classList.remove('hidden');
+            } else {
+                document.getElementById('peringatanMasterData').classList.add('hidden');
+            }
+        }
+
+        // ================= FITUR UPLOAD CSV KE SUPABASE =================
+        function prosesCSVSupabase() {
+            const fileInput = document.getElementById('fileCSV');
+            if (fileInput.files.length === 0) { alert('Silakan pilih file CSV terlebih dahulu!'); return; }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = async function(e) {
+                const text = e.target.result;
+                const baris = text.split('\n');
+                let dataInsertSupabase = [];
+
+                // Parsing CSV baris per baris
+                for (let i = 1; i < baris.length; i++) {
+                    const teksBaris = baris[i].trim();
+                    if (!teksBaris) continue;
+                    
+                    const kolom = teksBaris.split(/[,;]/); 
+                    if (kolom.length >= 2) {
+                        const kelasSiswa = kolom[0].trim().replace(/['"]/g, '');
+                        const namaSiswa = kolom[1].trim().replace(/['"]/g, '');
+                        
+                        dataInsertSupabase.push({
+                            kelas: kelasSiswa,
+                            nama_siswa: namaSiswa
+                        });
+                    }
+                }
+
+                if(dataInsertSupabase.length > 0) {
+                    showLoading("Menyimpan ratusan nama siswa ke Server Database...");
+                    try {
+                        const { error } = await supabase
+                            .from('master_siswa')
+                            .insert(dataInsertSupabase);
+
+                        if (error) throw error;
+
+                        alert('Ratusan data siswa berhasil diunggah ke Database Cloud!');
+                        document.getElementById('fileCSV').value = ""; // Reset input
+                        await fetchMasterSiswa(); // Muat ulang layar
+                    } catch (err) {
+                        alert("Gagal mengirim data CSV ke server: " + err.message);
+                    } finally {
+                        hideLoading();
+                    }
+                } else { 
+                    alert('Gagal membaca data. Pastikan format CSV sesuai ketentuan.'); 
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function renderPreviewMasterData() {
+            const container = document.getElementById('previewMasterData');
+            container.innerHTML = '';
+            if(Object.keys(masterSiswa).length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-sm col-span-2">Data server kosong. Belum ada kelas yang diunggah.</p>';
+                return;
+            }
+            for (const kelas in masterSiswa) {
+                container.innerHTML += `
+                    <div class="bg-white border rounded p-4 shadow-sm">
+                        <h4 class="font-bold text-blue-700 border-b pb-2 mb-2">${kelas} <span class="text-xs text-gray-500 font-normal">(${masterSiswa[kelas].length} Siswa)</span></h4>
+                        <div class="text-sm h-32 overflow-y-auto text-gray-600">
+                            ${masterSiswa[kelas].map((s, i) => `${i+1}.${s}`).join('<br>')}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        async function hapusMasterDataSupabase() {
+            if(confirm('PERINGATAN! Anda akan menghapus permanen ratusan nama siswa di Database Server. Yakin?')) {
+                showLoading("Menghapus seluruh siswa dari Server...");
+                try {
+                    const { error } = await supabase
+                        .from('master_siswa')
+                        .delete()
+                        .neq('id', 0);
+
+                    if (error) throw error;
+                    
+                    masterSiswa = {};
+                    renderDropdownKelas();
+                    renderPreviewMasterData();
+                    cekStatusMaster();
+                    alert("Master Data di server telah dikosongkan.");
+                } catch(err) {
+                    alert("Gagal menghapus master data: " + err.message);
+                } finally {
+                    hideLoading();
+                }
+            }
+        }
+
+        // ================= INPUT JURNAL LOGIC =================
+        function renderDropdownKelas() {
+            const selectKelas = document.getElementById('kelas');
+            selectKelas.innerHTML = '<option value="">-- Pilih Kelas --</option>';
+            for (const kelas in masterSiswa) {
+                selectKelas.innerHTML += `<option value="${kelas}">${kelas}</option>`;
+            }
+        }
+
         function renderAbsensiForm() {
             const kelas = document.getElementById('kelas').value;
             const container = document.getElementById('absensiContainer');
             const daftar = document.getElementById('daftarSiswa');
             
             daftar.innerHTML = '';
-            
-            if (kelas && dataSiswa[kelas]) {
+            if (kelas && masterSiswa[kelas]) {
                 container.classList.remove('hidden');
-                dataSiswa[kelas].forEach((siswa, index) => {
-                    const div = document.createElement('div');
-                    div.className = "flex items-center space-x-2 border-b pb-1 mb-1";
-                    div.innerHTML = `
-                        <span class="w-5 inline-block text-xs text-gray-500">${index+1}.</span>
-                        <span class="flex-1 truncate" title="${siswa}">${siswa}</span>
-                        <select id="absen_${index}" class="border rounded text-xs p-1 bg-gray-50">
-                            <option value="Hadir">H</option>
-                            <option value="Sakit">S</option>
-                            <option value="Izin">I</option>
-                            <option value="Alpa">A</option>
-                        </select>
+                masterSiswa[kelas].forEach((siswa, index) => {
+                    daftar.innerHTML += `
+                        <div class="flex items-center space-x-2 border-b pb-2">
+                            <span class="w-6 inline-block text-xs font-bold text-gray-400">${index+1}.</span>
+                            <span class="flex-1 truncate" title="${siswa}">${siswa}</span>
+                            <select id="absen_${index}" class="border rounded text-xs p-1 bg-gray-50 focus:ring-1 focus:ring-blue-500">
+                                <option value="Hadir">H</option>
+                                <option value="Sakit">S</option>
+                                <option value="Izin">I</option>
+                                <option value="Alpa">A</option>
+                            </select>
+                        </div>
                     `;
-                    daftar.appendChild(div);
                 });
-            } else {
-                container.classList.add('hidden');
-            }
+            } else { container.classList.add('hidden'); }
         }
 
-        // Fungsi Convert Gambar ke Base64 (Untuk disimpan & dicetak di PDF)
         function getBase64(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -175,22 +377,16 @@
             });
         }
 
-        // Fungsi Format Tanggal Standar (DD-MM-YYYY)
-        function formatTanggal(tglInput) {
-            const date = new Date(tglInput);
-            return `${("0" + date.getDate()).slice(-2)}-${("0" + (date.getMonth() + 1)).slice(-2)}-${date.getFullYear()}`;
-        }
-
-        // Menangani Submit Form
         document.getElementById('jurnalForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
+            if(!supabase) { alert("Koneksi database terputus."); return; }
+
             const kelas = document.getElementById('kelas').value;
             let ketAbsenArr = [];
             let detailAbsenSiswa = {};
             
-            // Cek absen tiap siswa
-            dataSiswa[kelas].forEach((siswa, index) => {
+            masterSiswa[kelas].forEach((siswa, index) => {
                 const status = document.getElementById(`absen_${index}`).value;
                 detailAbsenSiswa[siswa] = status;
                 if (status !== 'Hadir') {
@@ -199,237 +395,198 @@
             });
 
             let ketAbsenText = ketAbsenArr.length > 0 ? ketAbsenArr.join(', ') : "Semua Siswa Hadir";
+            const dateObj = new Date(document.getElementById('tanggal').value);
+            const formattedDate = `${("0" + dateObj.getDate()).slice(-2)}-${("0" + (dateObj.getMonth() + 1)).slice(-2)}-${dateObj.getFullYear()}`;
 
-            // Proses Foto
             const fileInput = document.getElementById('dokumentasi');
             let fotoBase64 = null;
             if (fileInput.files.length > 0) {
+                if(fileInput.files[0].size > 1048576) { 
+                    alert("Ukuran foto terlalu besar! Maksimal 1MB.");
+                    return;
+                }
                 fotoBase64 = await getBase64(fileInput.files[0]);
             }
 
             const newEntry = {
-                id: Date.now(),
-                tanggal: formatTanggal(document.getElementById('tanggal').value),
+                tanggal: formattedDate,
                 jam: document.getElementById('jam').value,
                 kelas: kelas,
                 mapel: document.getElementById('mapel').value,
                 materi: document.getElementById('materi').value,
-                ketAbsen: ketAbsenText,
-                detailAbsen: detailAbsenSiswa,
+                ket_absen: ketAbsenText,
+                detail_absen: detailAbsenSiswa,
                 foto: fotoBase64
             };
 
-            // Simpan ke array dan localStorage
-            jurnalData.push(newEntry);
-            saveData();
-            
-            renderTabelJurnal();
-            this.reset();
-            document.getElementById('absensiContainer').classList.add('hidden');
-            alert('Data Jurnal berhasil ditambahkan dan disimpan!');
+            showLoading("Menyimpan ke Server...");
+
+            try {
+                const { data, error } = await supabase.from('jurnal_mengajar').insert([newEntry]).select();
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    jurnalData.push(data[0]); 
+                    renderTabelJurnal();
+                }
+                
+                this.reset();
+                document.getElementById('absensiContainer').classList.add('hidden');
+                alert('Data Jurnal berhasil disimpan ke Database!');
+                bukaTab('tabRiwayat'); 
+            } catch(err) {
+                alert("Gagal menyimpan ke server: " + err.message);
+            } finally {
+                hideLoading();
+            }
         });
 
-        // Menyimpan Data ke LocalStorage
-        function saveData() {
-            localStorage.setItem('jurnalAgusImam', JSON.stringify(jurnalData));
-        }
-
-        // Merender Tabel Jurnal di Layar
+        // ================= RIWAYAT & PDF =================
         function renderTabelJurnal() {
             const tbody = document.getElementById('tabelJurnal');
             tbody.innerHTML = '';
             
             if (jurnalData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Belum ada data jurnal.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-500 bg-white">Belum ada data jurnal.</td></tr>`;
                 return;
             }
 
-            jurnalData.forEach((row, index) => {
-                const tr = document.createElement('tr');
-                tr.className = "border-b hover:bg-gray-50";
-                tr.innerHTML = `
-                    <td class="p-2 border">${row.tanggal}</td>
-                    <td class="p-2 border">${row.kelas}</td>
-                    <td class="p-2 border whitespace-pre-line">${row.materi}</td>
-                    <td class="p-2 border text-xs text-red-600">${row.ketAbsen}</td>
-                    <td class="p-2 border text-center">
-                        <button onclick="hapusBaris(${row.id})" class="text-red-500 font-bold hover:underline">Hapus</button>
-                    </td>
+            jurnalData.forEach((row) => {
+                tbody.innerHTML += `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-3 whitespace-nowrap">${row.tanggal}</td>
+                        <td class="p-3 whitespace-nowrap font-semibold">${row.kelas}</td>
+                        <td class="p-3 text-sm">${row.materi}</td>
+                        <td class="p-3 text-xs text-red-600">${row.ket_absen}</td>
+                        <td class="p-3 text-center">
+                            <button onclick="hapusBaris(${row.id})" class="text-red-500 text-xs font-bold bg-red-50 py-1 px-2 rounded hover:bg-red-100">Hapus</button>
+                        </td>
+                    </tr>
                 `;
-                tbody.appendChild(tr);
             });
         }
 
-        // Hapus satu data (jika salah input)
-        function hapusBaris(id) {
-            if(confirm('Yakin ingin menghapus jurnal ini?')) {
-                jurnalData = jurnalData.filter(d => d.id !== id);
-                saveData();
-                renderTabelJurnal();
+        async function hapusBaris(id) {
+            if(confirm('Hapus entri jurnal ini dari server permanen?')) {
+                showLoading("Menghapus data...");
+                try {
+                    const { error } = await supabase.from('jurnal_mengajar').delete().eq('id', id);
+                    if (error) throw error;
+                    
+                    jurnalData = jurnalData.filter(d => d.id !== id);
+                    renderTabelJurnal();
+                } catch(err) {
+                    alert("Gagal menghapus data: " + err.message);
+                } finally {
+                    hideLoading();
+                }
             }
         }
 
-        // Hapus semua data (Reset bulan baru)
-        function hapusSemuaData() {
-            if(confirm('PERINGATAN! Semua data jurnal, absensi, dan foto bulan ini akan dihapus permanen dari perangkat ini. Lanjutkan?')) {
-                jurnalData = [];
-                saveData();
-                renderTabelJurnal();
+        async function hapusSemuaJurnal() {
+            if(confirm('PERINGATAN! Semua data jurnal akan dihapus permanen dari Server. Anda yakin?')) {
+                showLoading("Mereset database...");
+                try {
+                    const { error } = await supabase.from('jurnal_mengajar').delete().neq('id', 0); 
+                    if (error) throw error;
+                    
+                    jurnalData = [];
+                    renderTabelJurnal();
+                    alert("Data bulan ini telah dibersihkan.");
+                } catch(err) {
+                    alert("Gagal menghapus seluruh data: " + err.message);
+                } finally {
+                    hideLoading();
+                }
             }
         }
 
-        // Panggil render saat pertama kali dimuat
-        renderTabelJurnal();
-
-        // -----------------------------------------------------
-        // FUNGSI GENERATE PDF MENGGUNAKAN JSPDF
-        // -----------------------------------------------------
+        // ================= FUNGSI PDF =================
         function generatePDF() {
-            if (jurnalData.length === 0) {
-                alert('Tidak ada data untuk dicetak!');
-                return;
-            }
+            if (jurnalData.length === 0) { alert('Tidak ada data jurnal untuk dicetak!'); return; }
 
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             
-            // Halaman 1: Jurnal Mengajar
-            doc.setFontSize(14);
-            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14); doc.setFont("helvetica", "bold");
             doc.text("LAPORAN JURNAL MENGAJAR GURU", 105, 15, { align: "center" });
             doc.text("SMK NEGERI SUKARESIK", 105, 22, { align: "center" });
             
-            doc.setFontSize(11);
-            doc.setFont("helvetica", "normal");
+            doc.setFontSize(11); doc.setFont("helvetica", "normal");
             doc.text("Nama Guru: AGUS IMAM MUHAROM, S.T.", 14, 35);
             doc.text(`Bulan: ${new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`, 14, 42);
 
             const tableBody = jurnalData.map((d, index) => [
-                index + 1,
-                d.tanggal,
-                d.jam,
-                d.kelas,
-                d.mapel,
-                d.materi,
-                d.ketAbsen
+                index + 1, d.tanggal, d.jam, d.kelas, d.mapel, d.materi, d.ket_absen
             ]);
 
             doc.autoTable({
                 startY: 48,
                 head: [['No', 'Tanggal', 'Jam', 'Kelas', 'Mapel', 'Materi Pembelajaran', 'Ket. Absen']],
                 body: tableBody,
-                theme: 'grid',
-                styles: { fontSize: 9, cellPadding: 2 },
+                theme: 'grid', styles: { fontSize: 9, cellPadding: 2 },
                 headStyles: { fillColor: [200, 200, 200], textColor: [0,0,0], halign: 'center' },
-                columnStyles: {
-                    0: { halign: 'center', cellWidth: 10 },
-                    1: { cellWidth: 20 },
-                    2: { halign: 'center', cellWidth: 12 },
-                    3: { halign: 'center', cellWidth: 20 },
-                    4: { cellWidth: 30 },
-                    5: { cellWidth: 50 },
-                    6: { cellWidth: 40 }
-                }
+                columnStyles: { 0: {cellWidth: 10}, 1: {cellWidth: 20}, 2: {cellWidth: 12}, 3: {cellWidth: 20}, 4: {cellWidth: 30}, 5: {cellWidth: 50}, 6: {cellWidth: 40} }
             });
 
-            // Fungsi Pembantu untuk Cetak Rekap Kelas
-            function cetakRekapKelas(namaKelas) {
-                const dataKelasTerfilter = jurnalData.filter(d => d.kelas === namaKelas);
-                if (dataKelasTerfilter.length === 0) return;
+            Object.keys(masterSiswa).forEach(namaKelas => {
+                const dataFilter = jurnalData.filter(d => d.kelas === namaKelas);
+                if (dataFilter.length === 0) return;
 
                 doc.addPage();
-                doc.setFontSize(14);
-                doc.setFont("helvetica", "bold");
+                doc.setFontSize(14); doc.setFont("helvetica", "bold");
                 doc.text("REKAPITULASI ABSENSI SISWA", 105, 15, { align: "center" });
                 doc.text("SMK NEGERI SUKARESIK", 105, 22, { align: "center" });
                 
-                doc.setFontSize(11);
-                doc.setFont("helvetica", "normal");
+                doc.setFontSize(11); doc.setFont("helvetica", "normal");
                 doc.text("Nama Guru: AGUS IMAM MUHAROM, S.T.", 14, 35);
-                doc.text(`Bulan: ${new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`, 14, 42);
-                doc.text(`Kelas: ${namaKelas}`, 14, 49);
-                doc.text(`Total Pertemuan: ${dataKelasTerfilter.length} kali`, 14, 56);
+                doc.text(`Kelas: ${namaKelas}`, 14, 42);
+                doc.text(`Total Pertemuan: ${dataFilter.length} kali`, 14, 49);
 
                 let rekapBody = [];
-                dataSiswa[namaKelas].forEach((siswa, index) => {
+                masterSiswa[namaKelas].forEach((siswa, index) => {
                     let hadir = 0, sakit = 0, izin = 0, alpa = 0;
-                    dataKelasTerfilter.forEach(jurnal => {
-                        let status = jurnal.detailAbsen[siswa] || 'Hadir'; // Default jika eror
-                        if(status === 'Hadir') hadir++;
-                        else if(status === 'Sakit') sakit++;
-                        else if(status === 'Izin') izin++;
-                        else if(status === 'Alpa') alpa++;
+                    dataFilter.forEach(jurnal => {
+                        let status = jurnal.detail_absen[siswa] || 'Hadir';
+                        if(status === 'Hadir') hadir++; else if(status === 'Sakit') sakit++;
+                        else if(status === 'Izin') izin++; else if(status === 'Alpa') alpa++;
                     });
                     rekapBody.push([index + 1, siswa, hadir, sakit, izin, alpa]);
                 });
 
                 doc.autoTable({
-                    startY: 62,
-                    head: [[{content: 'No', rowSpan: 2}, {content: 'Nama Siswa', rowSpan: 2}, {content: 'Keterangan', colSpan: 4}], 
-                           ['H', 'S', 'I', 'A']],
-                    body: rekapBody,
-                    theme: 'grid',
-                    styles: { fontSize: 9, cellPadding: 2 },
+                    startY: 55,
+                    head: [[{content: 'No', rowSpan: 2}, {content: 'Nama Siswa', rowSpan: 2}, {content: 'Keterangan', colSpan: 4}], ['H', 'S', 'I', 'A']],
+                    body: rekapBody, theme: 'grid', styles: { fontSize: 9, cellPadding: 2 },
                     headStyles: { fillColor: [200, 200, 200], textColor: [0,0,0], halign: 'center' },
-                    columnStyles: {
-                        0: { halign: 'center', cellWidth: 10 },
-                        2: { halign: 'center', cellWidth: 10 },
-                        3: { halign: 'center', cellWidth: 10 },
-                        4: { halign: 'center', cellWidth: 10 },
-                        5: { halign: 'center', cellWidth: 10 }
-                    }
+                    columnStyles: { 0: {halign: 'center', cellWidth: 10}, 2: {halign: 'center', cellWidth: 10}, 3: {halign: 'center', cellWidth: 10}, 4: {halign: 'center', cellWidth: 10}, 5: {halign: 'center', cellWidth: 10} }
                 });
-            }
+            });
 
-            // Halaman 2: Rekap XI TKJ 2
-            cetakRekapKelas("XI TKJ 2");
-            // Halaman 3: Rekap XII TKJ 2
-            cetakRekapKelas("XII TKJ 2");
-
-            // Halaman 4: Dokumentasi
-            const fotoData = jurnalData.filter(d => d.foto !== null);
+            const fotoData = jurnalData.filter(d => d.foto !== null && d.foto !== "");
             if(fotoData.length > 0) {
                 doc.addPage();
-                doc.setFontSize(14);
-                doc.setFont("helvetica", "bold");
+                doc.setFontSize(14); doc.setFont("helvetica", "bold");
                 doc.text("LAMPIRAN DOKUMENTASI", 105, 15, { align: "center" });
-                doc.text("SMK NEGERI SUKARESIK", 105, 22, { align: "center" });
-
-                let yPos = 35;
-                let xPos = 14;
                 
-                fotoData.forEach((item, index) => {
-                    // Cek jika gambar melewati batas kertas ke bawah
-                    if (yPos > 230) {
-                        doc.addPage();
-                        yPos = 20;
-                        xPos = 14;
-                    }
-                    
-                    doc.setFontSize(10);
-                    doc.text(`${item.kelas} - ${item.mapel}`, xPos, yPos);
-                    doc.text(`(${item.tanggal})`, xPos, yPos + 5);
-                    
-                    // Render Image (x, y, width, height)
-                    try {
-                        doc.addImage(item.foto, 'JPEG', xPos, yPos + 8, 80, 60);
-                    } catch(e) {
-                        doc.text("[Format gambar tidak didukung/terlalu besar]", xPos, yPos + 30);
-                    }
+                let yPos = 25; let xPos = 14;
+                fotoData.forEach((item) => {
+                    if (yPos > 230) { doc.addPage(); yPos = 20; xPos = 14; }
+                    doc.setFontSize(10); doc.setFont("helvetica", "normal");
+                    doc.text(`${item.kelas} - ${item.tanggal}`, xPos, yPos);
+                    try { doc.addImage(item.foto, 'JPEG', xPos, yPos + 3, 80, 60); } 
+                    catch(e) { doc.text("[Format gambar tidak didukung]", xPos, yPos + 30); }
 
-                    // Logika layout 2 kolom gambar (Kiri Kanan)
-                    if (xPos === 14) {
-                        xPos = 105; // Pindah ke kolom kanan
-                    } else {
-                        xPos = 14; // Kembali ke kiri
-                        yPos += 80; // Turun ke baris bawah
-                    }
+                    if (xPos === 14) xPos = 105; 
+                    else { xPos = 14; yPos += 75; }
                 });
             }
 
-            // Simpan / Unduh PDF
-            doc.save("Laporan_Mengajar_AGUS_IMAM_MUHAROM.pdf");
+            doc.save(`Jurnal_Mengajar_${new Date().toLocaleString('id-ID', { month: 'short' })}.pdf`);
         }
+
+        // Mulai aplikasi
+        window.onload = initApp;
     </script>
 </body>
 </html>
